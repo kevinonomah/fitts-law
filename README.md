@@ -13,6 +13,9 @@ python3 fitts_app.py                 # fullscreen, 10 blocks x 32 trials
 python3 fitts_app.py --blocks 1 --windowed   # quick test
 ```
 
+Distances are measured edge to edge: from the side of the centre square to
+the nearest edge of the target circle. Participants use a mouse.
+
 Data is appended to `data/participants.csv` and `data/trials.csv` (one row per
 trial: time, distance travelled from 0.5 s pointer samples, clicks, errors =
 clicks - 1). Press Esc to quit; data collected so far is kept.

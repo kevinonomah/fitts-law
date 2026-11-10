@@ -5,6 +5,8 @@ Run:  python3 fitts_app.py [--blocks N] [--windowed] [--data-dir DIR]
 Design (see Fitts Law Project Instructions.pdf):
   * 4 diameters x 4 distances x 2 directions = 32 tasks per block, shuffled
     within each block; 10 blocks = 320 trials per participant.
+  * Distance is measured edge to edge: from the side of the start square to
+    the nearest edge of the target circle.
   * A trial starts when the participant clicks the start marker at the screen
     centre (first click, sample 0). The target circle appears at that moment.
   * Pointer position is sampled every 0.5 s from the first click until the
@@ -37,7 +39,7 @@ START_HALF = 25   # half-side of the square start icon (px)
 CONSENT_TEXT = (
     "INFORMED CONSENT\n\n"
     "This study measures how quickly and accurately you can point and click on\n"
-    "circles of different sizes and distances using a mouse or trackpad.\n\n"
+    "circles of different sizes and distances using a mouse.\n\n"
     "- You must be 18 years or older.\n"
     "- The session takes about 15-20 minutes (320 clicking trials).\n"
     "- We record your handedness, weekly computer use, and the timing,\n"
@@ -49,7 +51,7 @@ CONSENT_TEXT = (
 
 PARTICIPANT_FIELDS = [
     "participant_id", "consent", "consent_timestamp", "handedness",
-    "hours_per_week", "input_device", "screen_w", "screen_h",
+    "hours_per_week", "screen_w", "screen_h",
 ]
 TRIAL_FIELDS = [
     "participant_id", "block", "trial_in_block", "trial_overall", "diameter",
@@ -149,31 +151,27 @@ class FittsApp:
                  bg="white").grid(row=0, column=0, columnspan=2, pady=15)
         hours = tk.StringVar(value="Select...")
         hand = tk.StringVar(value="right")
-        device = tk.StringVar(value="mouse")
         font = ("Helvetica", 15)
         tk.Label(f, text="Handedness:", font=font, bg="white").grid(row=1, column=0, sticky="e", pady=6)
         tk.OptionMenu(f, hand, "right", "left", "ambidextrous").grid(row=1, column=1, sticky="w")
         tk.Label(f, text="Computer use (hours/week):", font=font, bg="white").grid(row=2, column=0, sticky="e", pady=6)
         tk.OptionMenu(f, hours, *HOURS_RANGES).grid(row=2, column=1, sticky="w")
-        tk.Label(f, text="Input device:", font=font, bg="white").grid(row=3, column=0, sticky="e", pady=6)
-        tk.OptionMenu(f, device, "mouse", "trackpad").grid(row=3, column=1, sticky="w")
 
         def submit():
             h = hours.get()
             if h not in HOURS_RANGES:
                 messagebox.showerror("Missing input", "Please select your computer use per week.")
                 return
-            self.participant.update(handedness=hand.get(),
-                                    hours_per_week=h, input_device=device.get())
+            self.participant.update(handedness=hand.get(), hours_per_week=h)
             self.show_instructions()
 
         tk.Button(f, text="Continue", font=("Helvetica", 16), width=12,
-                  command=submit).grid(row=4, column=0, columnspan=2, pady=20)
+                  command=submit).grid(row=3, column=0, columnspan=2, pady=20)
 
     def show_instructions(self):
         self.root.update_idletasks()
         w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
-        needed = 2 * (max(DISTANCES) + max(DIAMETERS) // 2) + 20
+        needed = 2 * (START_HALF + max(DISTANCES) + max(DIAMETERS)) + 20
         if w < needed:
             messagebox.showerror(
                 "Screen too small",
@@ -241,9 +239,10 @@ class FittsApp:
         self.block, self.trial_in_block, (self.diameter, self.distance, self.direction) = \
             self.trials[self.index]
         sign = -1 if self.direction == "L" else 1
-        self.tx = self.cx + sign * self.distance
-        self.ty = self.cy
         r = self.diameter / 2
+        # Edge to edge: square edge -> gap of `distance` px -> near edge of circle.
+        self.tx = self.cx + sign * (START_HALF + self.distance + self.diameter // 2)
+        self.ty = self.cy
         self.canvas.create_oval(self.tx - r, self.ty - r, self.tx + r, self.ty + r,
                                 fill="tomato", outline="", tags="target")
         self.canvas.itemconfigure(self.feedback, text="")
@@ -294,11 +293,7 @@ class FittsApp:
         if self.index >= len(self.trials):
             self.show_done()
             return
-        msg = "Done - %.2f s" % (t_ms / 1000)
-        if errors:
-            msg += ", %d miss%s" % (errors, "" if errors == 1 else "es")
-        self.canvas.itemconfigure(self.feedback, text=msg,
-                                  fill="green4" if errors == 0 else "orange3")
+        self.canvas.itemconfigure(self.feedback, text="Done - %.2f s" % (t_ms / 1000))
         self.update_status()
 
     # ---------- end screens ----------
@@ -320,6 +315,9 @@ def main():
     ap.add_argument("--data-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
     args = ap.parse_args()
     root = tk.Tk()
+    # The screens use a white background; without this, macOS Dark Mode makes
+    # label text white too, so it disappears.
+    root.option_add("*Label.foreground", "black")
     root.title("Fitts's Law Experiment")
     if args.windowed:
         root.geometry("1400x800")
